@@ -2,6 +2,7 @@ package com.homelab.calendar
 
 import android.util.Base64
 import java.security.MessageDigest
+import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -31,5 +32,23 @@ object CryptoHelper {
 
         val decryptedBytes = cipher.doFinal(ciphertextBytes)
         return String(decryptedBytes, Charsets.UTF_8)
+    }
+
+    fun encrypt(plainText: String): String {
+        val keySpec = getKey(PASSWORD)
+
+        // Generate random 16-byte IV
+        val iv = ByteArray(16)
+        SecureRandom().nextBytes(iv)
+        val ivSpec = IvParameterSpec(iv)
+
+        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec)
+
+        val ciphertextBytes = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
+
+        // Combine IV + ciphertext and base64 encode (matching Python format)
+        val combined = iv + ciphertextBytes
+        return Base64.encodeToString(combined, Base64.NO_WRAP)
     }
 }
