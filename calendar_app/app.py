@@ -11,21 +11,26 @@ CORS(app)
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'things_to_do.json')
 NGZ_DIR = '/home/ale/NGZ'
 
+# Threading Lock to prevent race conditions during async git syncs
+file_lock = threading.Lock()
+
 def load_tasks():
-    if not os.path.exists(DATA_FILE):
-        return []
-    try:
-        with open(DATA_FILE, 'r') as f:
-            return json.load(f)
-    except Exception:
-        return []
+    with file_lock:
+        if not os.path.exists(DATA_FILE):
+            return []
+        try:
+            with open(DATA_FILE, 'r') as f:
+                return json.load(f)
+        except Exception:
+            return []
 
 def save_tasks(tasks):
-    try:
-        with open(DATA_FILE, 'w') as f:
-            json.dump(tasks, f, indent=2)
-    except Exception as e:
-        print(f"Error saving tasks: {e}")
+    with file_lock:
+        try:
+            with open(DATA_FILE, 'w') as f:
+                json.dump(tasks, f, indent=2)
+        except Exception as e:
+            print(f"Error saving tasks: {e}")
 
 # Git Sync Helpers
 def run_git_command(args, cwd=NGZ_DIR):
@@ -57,13 +62,17 @@ def sync_pull():
                 # Verify it is valid JSON before overwriting
                 json.loads(decrypted_json)
                 
-                with open(DATA_FILE, 'w') as f:
-                    f.write(decrypted_json)
+                with file_lock:
+                    with open(DATA_FILE, 'w') as f:
+                        f.write(decrypted_json)
                 print("[SYNC] Decrypted and synchronized database from GitHub.")
                 return True
         except Exception as e:
             print(f"[SYNC ERROR] Decryption failed: {e}")
     return False
+
+def sync_pull_async():
+    threading.Thread(target=sync_pull).start()
 
 def sync_push_async():
     def task():
@@ -73,8 +82,9 @@ def sync_push_async():
         
         # 2. Encrypt and write to NGZ
         try:
-            with open(DATA_FILE, 'r') as f:
-                plain_text = f.read()
+            with file_lock:
+                with open(DATA_FILE, 'r') as f:
+                    plain_text = f.read()
             from crypto_helper import encrypt_data
             enc_data = encrypt_data(plain_text)
             
@@ -144,10 +154,11 @@ def serve_sw():
 
 @app.route('/api/tasks', methods=['GET'])
 def get_tasks():
+    # Trigger pull asynchronously to prevent blocking the HTTP response thread
     try:
-        sync_pull()
+        sync_pull_async()
     except Exception as e:
-        print(f"[API] Sync pull during GET failed: {e}")
+        print(f"[API] Async pull trigger failed: {e}")
     return jsonify(load_tasks())
 
 @app.route('/api/tasks', methods=['POST'])
