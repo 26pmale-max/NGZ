@@ -15,12 +15,16 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.homelab.calendar.databinding.ActivityMainBinding
 import com.homelab.calendar.databinding.ItemCalendarDayBinding
 import com.homelab.calendar.databinding.ItemTaskBinding
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -136,29 +140,68 @@ class MainActivity : AppCompatActivity() {
     private fun loadData() {
         lifecycleScope.launch {
             try {
+                // 1. Try local server first
                 val response = apiService.getTasks()
                 if (response.isSuccessful && response.body() != null) {
                     tasks.clear()
                     tasks.addAll(response.body()!!)
                     updateTaskListUI()
                     updateCalendarGrid()
-                    binding.statusText.text = "Online"
+                    binding.statusText.text = "Local"
                     binding.statusText.setBackgroundResource(R.drawable.glass_badge_green)
                     binding.statusText.setTextColor(android.graphics.Color.parseColor("#34d399"))
                 } else {
-                    showError("Failed to load tasks")
+                    tryFallbackCloud()
                 }
             } catch (e: Exception) {
-                showError("Server unreachable: ${e.localizedMessage}")
-                binding.statusText.text = "Offline"
-                binding.statusText.setBackgroundResource(0)
-                binding.statusText.setTextColor(android.graphics.Color.parseColor("#f87171"))
+                // Local server offline/unreachable, fallback to GitHub tasks.enc
+                tryFallbackCloud(e.localizedMessage)
             }
         }
     }
 
+    private fun tryFallbackCloud(errorMessage: String? = null) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // Fetch encrypted data directly from the public GitHub repository
+                val url = "https://raw.githubusercontent.com/26pmale-max/NGZ/main/tasks.enc"
+                val encData = URL(url).readText().trim()
+                if (encData.isNotEmpty()) {
+                    val decryptedJson = CryptoHelper.decrypt(encData)
+                    val taskType = object : TypeToken<List<Task>>() {}.type
+                    val cloudTasks = Gson().fromJson<List<Task>>(decryptedJson, taskType)
+                    
+                    launch(Dispatchers.Main) {
+                        tasks.clear()
+                        tasks.addAll(cloudTasks)
+                        updateTaskListUI()
+                        updateCalendarGrid()
+                        binding.statusText.text = "Cloud (Encrypted)"
+                        binding.statusText.setBackgroundResource(R.drawable.glass_badge_orange)
+                        binding.statusText.setTextColor(android.graphics.Color.parseColor("#fbbf24"))
+                        Toast.makeText(this@MainActivity, "Connected to Encrypted Cloud Sync", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    launch(Dispatchers.Main) {
+                        showOffline(errorMessage)
+                    }
+                }
+            } catch (ce: Exception) {
+                launch(Dispatchers.Main) {
+                    showOffline(errorMessage ?: ce.localizedMessage)
+                }
+            }
+        }
+    }
+
+    private fun showOffline(reason: String?) {
+        showError("Unreachable: $reason")
+        binding.statusText.text = "Offline"
+        binding.statusText.setBackgroundResource(0)
+        binding.statusText.setTextColor(android.graphics.Color.parseColor("#f87171"))
+    }
+
     private fun updateTaskListUI() {
-        // Sort tasks by date and time
         val sortedTasks = tasks.sortedWith(compareBy({ it.date }, { it.time }))
         binding.taskRecyclerView.adapter = TaskAdapter(sortedTasks)
     }
@@ -193,7 +236,7 @@ class MainActivity : AppCompatActivity() {
                     showError("Failed to add task")
                 }
             } catch (e: Exception) {
-                showError("Connection failed")
+                showError("Connection failed - Cannot add tasks while offline")
             }
         }
     }
@@ -235,20 +278,16 @@ class MainActivity : AppCompatActivity() {
 
         val days = mutableListOf<CalendarDay>()
         
-        // Find start of month
         val cal = calendarInstance.clone() as Calendar
         cal.set(Calendar.DAY_OF_MONTH, 1)
-        val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) - 1 // 0-indexed Sun=0
+        val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) - 1
         
-        // Go back to the start of the week grid
         cal.add(Calendar.DAY_OF_MONTH, -firstDayOfWeek)
 
-        // Generate 42 grid cells
         for (i in 0 until 42) {
             val cellDate = cal.clone() as Calendar
             val formattedDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cellDate.time)
             
-            // Check if there are tasks on this day
             val hasTasks = tasks.any { it.date == formattedDate }
             val isCurrentMonth = cellDate.get(Calendar.MONTH) == calendarInstance.get(Calendar.MONTH)
             val isToday = cellDate.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
@@ -265,7 +304,6 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
-    // --- Data Model for Calendar Days ---
     data class CalendarDay(
         val dayNum: Int,
         val isCurrentMonth: Boolean,
@@ -273,9 +311,6 @@ class MainActivity : AppCompatActivity() {
         val hasTasks: Boolean
     )
 
-    // --- RecyclerView Adapters ---
-    
-    // 1. Calendar Day Adapter
     inner class CalendarDayAdapter(private val daysList: List<CalendarDay>) :
         RecyclerView.Adapter<CalendarDayAdapter.DayViewHolder>() {
 
@@ -289,11 +324,8 @@ class MainActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: DayViewHolder, position: Int) {
             val day = daysList[position]
             holder.binding.txtDayNumber.text = day.dayNum.toString()
-            
-            // Day text opacity based on month
             holder.binding.txtDayNumber.alpha = if (day.isCurrentMonth) 1.0f else 0.3f
             
-            // Highlight today
             if (day.isToday) {
                 holder.binding.txtDayNumber.setTextColor(android.graphics.Color.parseColor("#38bdf8"))
                 holder.binding.txtDayNumber.setTypeface(null, android.graphics.Typeface.BOLD)
@@ -302,14 +334,12 @@ class MainActivity : AppCompatActivity() {
                 holder.binding.txtDayNumber.setTypeface(null, android.graphics.Typeface.NORMAL)
             }
 
-            // Dot Indicator
             holder.binding.dotIndicator.visibility = if (day.hasTasks) View.VISIBLE else View.INVISIBLE
         }
 
         override fun getItemCount() = daysList.size
     }
 
-    // 2. Task RecyclerView Adapter
     inner class TaskAdapter(private val taskList: List<Task>) :
         RecyclerView.Adapter<TaskAdapter.TaskViewHolder>() {
 
@@ -326,7 +356,6 @@ class MainActivity : AppCompatActivity() {
             holder.binding.txtDateTime.text = "${task.date} @ ${task.time}"
             holder.binding.cbCompleted.isChecked = task.completed
 
-            // Strike-through if completed
             if (task.completed) {
                 holder.binding.txtDescription.paintFlags = holder.binding.txtDescription.paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG
                 holder.binding.txtDescription.alpha = 0.5f
