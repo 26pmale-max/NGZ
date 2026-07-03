@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Calendar & Tasks</title>
+    <!-- Web App Manifest & Meta Tags for Android Edge-to-Edge -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FullCalendar JS -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        glass: {
+                            light: 'rgba(255, 255, 255, 0.08)',
+                            medium: 'rgba(255, 255, 255, 0.12)',
+                            heavy: 'rgba(255, 255, 255, 0.2)'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at 50% 50%, #1e1b4b 0%, #0f172a 100%);
+            overscroll-behavior-y: contain; /* Disable pull-to-refresh on mobile */
+        }
+        
+        .glass-card {
+            background: rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .glass-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #f8fafc;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #38bdf8;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+            outline: none;
+        }
+
+        /* 120Hz smooth transitions */
+        .smooth-transition {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Custom Calendar Styling for Glassmorphism */
+        .fc {
+            --fc-border-color: rgba(255, 255, 255, 0.08);
+            --fc-button-text-color: #f8fafc;
+            --fc-button-bg-color: rgba(255, 255, 255, 0.05);
+            --fc-button-border-color: rgba(255, 255, 255, 0.1);
+            --fc-button-hover-bg-color: rgba(255, 255, 255, 0.12);
+            --fc-button-hover-border-color: #38bdf8;
+            --fc-button-active-bg-color: rgba(56, 189, 248, 0.2);
+            --fc-button-active-border-color: #38bdf8;
+            --fc-today-bg-color: rgba(56, 189, 248, 0.08);
+            background: transparent;
+            color: #f8fafc;
+        }
+
+        .fc .fc-toolbar-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            color: #38bdf8;
+        }
+
+        .fc .fc-button {
+            text-transform: capitalize;
+            font-weight: 600;
+            font-size: 0.75rem;
+            border-radius: 8px;
+            padding: 5px 10px;
+        }
+
+        .fc-theme-standard td, .fc-theme-standard th {
+            border-color: rgba(255, 255, 255, 0.06);
+        }
+
+        .fc-col-header-cell {
+            padding: 8px 0 !important;
+            font-weight: 600;
+            color: #94a3b8;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .fc-daygrid-day-number {
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            font-weight: 600;
+            padding: 4px 6px !important;
+        }
+
+        .fc-event {
+            background: rgba(14, 165, 233, 0.2) !important;
+            border: 1px solid rgba(14, 165, 233, 0.4) !important;
+            border-radius: 6px !important;
+            padding: 2px 4px !important;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+        }
+
+        .fc-event.completed-event {
+            background: rgba(16, 185, 129, 0.15) !important;
+            border: 1px solid rgba(16, 185, 129, 0.3) !important;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.05);
+        }
+
+        .fc-day-other {
+            opacity: 0.3;
+        }
+
+        /* Animation when tapping buttons */
+        .active-scale:active {
+            transform: scale(0.96);
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-100 flex flex-col antialiased">
+    <!-- Edge-to-edge Header (Optimized for S24 status bar spacing) -->
+    <header class="pt-8 pb-4 px-6 flex items-center justify-between border-b border-white/5 bg-slate-950/20 backdrop-blur-md sticky top-0 z-40">
+        <div class="flex items-center gap-2">
+            <span class="text-xl">✨</span>
+            <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-sky-400 to-indigo-400 bg-clip-text text-transparent">My Calendar</h1>
+        </div>
+        <div id="connection-status" class="flex items-center gap-1.5 text-xs text-emerald-400 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+            <span>Online</span>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 w-full max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 pb-24">
+        <!-- Quick Add Section (Left Panel on Desktop, Top on Mobile) -->
+        <div class="lg:col-span-1 flex flex-col gap-6">
+            <div class="glass-card rounded-2xl p-5">
+                <h2 class="text-sm font-bold text-sky-400 mb-4 tracking-wide uppercase flex items-center gap-1.5">
+                    <span>⚡</span> Quick Add Event
+                </h2>
+                <form id="task-form" class="flex flex-col gap-4">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Description</label>
+                        <input type="text" id="task-desc" required placeholder="Clean the lab room..." 
+                               class="w-full px-3 py-2.5 text-sm rounded-xl glass-input smooth-transition">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Date</label>
+                            <input type="date" id="task-date" required
+                                   class="w-full px-3 py-2.5 text-sm rounded-xl glass-input smooth-transition">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Time</label>
+                            <input type="time" id="task-time" required
+                                   class="w-full px-3 py-2.5 text-sm rounded-xl glass-input smooth-transition">
+                        </div>
+                    </div>
+                    <button type="submit" 
+                            class="w-full bg-sky-500 hover:bg-sky-400 active-scale text-slate-950 font-bold py-3 rounded-xl text-sm transition-all shadow-lg shadow-sky-500/20 mt-2">
+                        Add to Calendar
+                    </button>
+                </form>
+            </div>
+
+            <!-- List View (Left Panel bottom) -->
+            <div class="glass-card rounded-2xl p-5 flex-1 flex flex-col min-h-[250px]">
+                <h3 class="text-sm font-bold text-sky-400 mb-3 tracking-wide uppercase flex items-center justify-between">
+                    <span>📝 Events List</span>
+                    <span id="task-count" class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full font-bold">0</span>
+                </h3>
+                <div id="task-list" class="flex-1 overflow-y-auto max-h-[300px] lg:max-h-[350px] flex flex-col gap-2">
+                    <div class="text-slate-500 text-xs text-center py-8">Loading tasks...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full Interactive Calendar (Right Panel) -->
+        <div class="lg:col-span-3">
+            <div class="glass-card rounded-2xl p-4 shadow-2xl">
+                <div id="calendar"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Glassmorphic Details Modal -->
+    <div id="task-modal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-card rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-200">
+            <div class="flex items-start justify-between mb-4">
+                <h3 class="text-base font-bold text-sky-400 tracking-tight" id="modal-task-title">Event details</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-100 text-lg active-scale smooth-transition">✕</button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Description</span>
+                    <p class="text-sm font-semibold text-slate-100 mt-1" id="modal-task-desc">-</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Date</span>
+                        <p class="text-sm font-semibold text-slate-200 mt-1" id="modal-task-date">-</p>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Time</span>
+                        <p class="text-sm font-semibold text-slate-200 mt-1" id="modal-task-time">-</p>
+                    </div>
+                </div>
+                <div>
+                    <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</span>
+                    <p class="text-xs font-bold inline-block px-2.5 py-0.5 rounded-full mt-1.5" id="modal-task-status">-</p>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-between gap-3 border-t border-white/5 pt-4">
+                <button id="modal-delete-btn" 
+                        class="px-4 py-2 border border-rose-500/20 hover:bg-rose-500/10 text-rose-400 text-xs font-bold rounded-xl active-scale smooth-transition">
+                    Delete
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="closeModal()" 
+                            class="px-4 py-2 border border-white/10 hover:bg-white/5 text-slate-300 text-xs font-bold rounded-xl active-scale smooth-transition">
+                        Cancel
+                    </button>
+                    <button id="modal-toggle-btn" 
+                            class="px-4 py-2 bg-sky-500 text-slate-950 text-xs font-bold rounded-xl active-scale smooth-transition">
+                        Toggle Completed
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PWA Installation Toast (Mobile) -->
+    <div id="pwa-install-banner" class="fixed bottom-6 left-6 right-6 glass-card p-4 rounded-xl flex items-center justify-between border border-sky-500/20 z-40 hidden animate-bounce">
+        <div class="flex items-center gap-3">
+            <span class="text-xl">📱</span>
+            <div>
+                <h4 class="text-xs font-bold text-slate-100">Add to S24 Home Screen</h4>
+                <p class="text-[10px] text-slate-400">Install for full-screen standalone mode.</p>
+            </div>
+        </div>
+        <button id="pwa-install-btn" class="bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold px-3 py-1.5 rounded-lg active-scale">
+            Install
+        </button>
+    </div>
+
+    <script>
+        let calendar;
+        let activeTask = null;
+        let deferredPrompt;
+
+        // Set default date picker values
+        document.getElementById('task-date').value = new Date().toISOString().split('T')[0];
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        document.getElementById('task-time').value = `${hours}:${minutes}`;
+
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('ServiceWorker registered:', reg.scope))
+                    .catch(err => console.log('ServiceWorker registration failed:', err));
+            });
+        }
+
+        // PWA Install Prompt Capture
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const banner = document.getElementById('pwa-install-banner');
+            banner.classList.remove('hidden');
+        });
+
+        document.getElementById('pwa-install-btn').addEventListener('click', () => {
+            const banner = document.getElementById('pwa-install-banner');
+            banner.classList.add('hidden');
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the PWA install prompt');
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const calendarEl = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: window.innerWidth < 768 ? 'timeGridDay' : 'dayGridMonth',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: window.innerWidth < 768 ? 'timeGridDay,timeGridWeek' : 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                height: 'auto',
+                events: fetchEvents,
+                eventClick: function(info) {
+                    showTaskDetails(info.event.id);
+                },
+                windowResize: function(view) {
+                    if (window.innerWidth < 768) {
+                        calendar.changeView('timeGridDay');
+                    } else {
+                        calendar.changeView('dayGridMonth');
+                    }
+                },
+                eventContent: function(arg) {
+                    const isCompleted = arg.event.extendedProps.completed;
+                    const title = arg.event.title;
+                    const time = arg.event.extendedProps.time;
+                    
+                    const borderClass = isCompleted ? 'border-emerald-500/30' : 'border-sky-500/30';
+                    const textClass = isCompleted ? 'text-emerald-300 line-through opacity-70' : 'text-sky-300';
+                    
+                    return {
+                        html: `
+                            <div class="px-2 py-0.5 rounded text-[11px] truncate flex items-center justify-between ${textClass}">
+                                <span><b>${time}</b> ${title}</span>
+                                ${isCompleted ? '<span class="text-emerald-400 font-bold ml-1">✓</span>' : ''}
+                            </div>
+                        `
+                    };
+                }
+            });
+            calendar.render();
+
+            loadTaskList();
+
+            // Submit Task
+            document.getElementById('task-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const description = document.getElementById('task-desc').value;
+                const date = document.getElementById('task-date').value;
+                const time = document.getElementById('task-time').value;
+
+                fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ description, date, time })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('task-desc').value = '';
+                    calendar.refetchEvents();
+                    loadTaskList();
+                });
+            });
+
+            // Monitor online/offline status
+            window.addEventListener('online', updateStatus);
+            window.addEventListener('offline', updateStatus);
+        });
+
+        function updateStatus() {
+            const status = document.getElementById('connection-status');
+            if (navigator.onLine) {
+                status.className = "flex items-center gap-1.5 text-xs text-emerald-400 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20";
+                status.querySelector('span:first-child').className = "w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping";
+                status.querySelector('span:last-child').textContent = "Online";
+            } else {
+                status.className = "flex items-center gap-1.5 text-xs text-rose-400 font-medium bg-rose-500/10 px-2.5 py-1 rounded-full border border-rose-500/20";
+                status.querySelector('span:first-child').className = "w-1.5 h-1.5 rounded-full bg-rose-400";
+                status.querySelector('span:last-child').textContent = "Offline";
+            }
+        }
+
+        function fetchEvents(info, successCallback, failureCallback) {
+            fetch('/api/tasks')
+                .then(res => res.json())
+                .then(tasks => {
+                    const events = tasks.map(t => ({
+                        id: String(t.id),
+                        title: t.description,
+                        start: `${t.date}T${t.time}`,
+                        allDay: false,
+                        className: t.completed ? 'completed-event' : '',
+                        extendedProps: {
+                            completed: t.completed,
+                            time: t.time,
+                            date: t.date
+                        }
+                    }));
+                    successCallback(events);
+                })
+                .catch(err => failureCallback(err));
+        }
+
+        function loadTaskList() {
+            fetch('/api/tasks')
+                .then(res => res.json())
+                .then(tasks => {
+                    const listContainer = document.getElementById('task-list');
+                    const countBadge = document.getElementById('task-count');
+                    countBadge.textContent = tasks.length;
+
+                    tasks.sort((a, b) => {
+                        const dateA = new Date(`${a.date}T${a.time}`);
+                        const dateB = new Date(`${b.date}T${b.time}`);
+                        return dateA - dateB;
+                    });
+
+                    if (tasks.length === 0) {
+                        listContainer.innerHTML = '<div class="text-slate-500 text-xs text-center py-8">No tasks created yet.</div>';
+                        return;
+                    }
+
+                    listContainer.innerHTML = tasks.map(t => {
+                        const completedClass = t.completed ? 'opacity-50 line-through text-slate-400 bg-emerald-950/10' : 'text-slate-200 bg-white/5';
+                        const checkIcon = t.completed ? '🟢' : '⚪';
+                        return `
+                            <div onclick="showTaskDetails(${t.id})" 
+                                 class="p-3 border border-white/5 rounded-xl flex items-center justify-between cursor-pointer hover:bg-white/10 hover:border-sky-500/20 transition-all ${completedClass}">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xs">${checkIcon}</span>
+                                    <div>
+                                        <div class="text-xs font-semibold text-slate-100">${t.description}</div>
+                                        <div class="text-[10px] text-slate-400 mt-0.5">${t.date} @ ${t.time}</div>
+                                    </div>
+                                </div>
+                                <button onclick="event.stopPropagation(); deleteTask(${t.id})" class="text-slate-500 hover:text-rose-400 p-1 text-xs active-scale">✕</button>
+                            </div>
+                        `;
+                    }).join('');
+                });
+        }
+
+        function showTaskDetails(taskId) {
+            fetch('/api/tasks')
+                .then(res => res.json())
+                .then(tasks => {
+                    const task = tasks.find(t => t.id === Number(taskId));
+                    if (!task) return;
+
+                    activeTask = task;
+                    document.getElementById('modal-task-desc').textContent = task.description;
+                    document.getElementById('modal-task-date').textContent = task.date;
+                    document.getElementById('modal-task-time').textContent = task.time;
+                    
+                    const statusText = document.getElementById('modal-task-status');
+                    statusText.textContent = task.completed ? 'Completed' : 'Pending';
+                    statusText.className = `text-[10px] font-bold inline-block px-2.5 py-0.5 rounded-full mt-1.5 ${task.completed ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-amber-500/10 text-amber-400 border border-amber-500/25'}`;
+
+                    document.getElementById('modal-delete-btn').onclick = function() {
+                        deleteTask(task.id);
+                        closeModal();
+                    };
+
+                    document.getElementById('modal-toggle-btn').onclick = function() {
+                        toggleTask(task.id);
+                        closeModal();
+                    };
+
+                    document.getElementById('task-modal').classList.remove('hidden');
+                });
+        }
+
+        function closeModal() {
+            document.getElementById('task-modal').classList.add('hidden');
+            activeTask = null;
+        }
+
+        function deleteTask(taskId) {
+            fetch(`/api/tasks/${taskId}`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(() => {
+                    calendar.refetchEvents();
+                    loadTaskList();
+                });
+        }
+
+        function toggleTask(taskId) {
+            fetch(`/api/tasks/${taskId}/toggle`, { method: 'POST' })
+                .then(res => res.json())
+                .then(() => {
+                    calendar.refetchEvents();
+                    loadTaskList();
+                });
+        }
+    </script>
+</body>
+</html>

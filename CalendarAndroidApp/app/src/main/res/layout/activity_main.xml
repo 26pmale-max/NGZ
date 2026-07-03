@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://tools.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_dark_radial"
+    tools:context=".MainActivity">
+
+    <!-- Header Section -->
+    <RelativeLayout
+        android:id="@+id/headerLayout"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:paddingHorizontal="16dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/appTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:text="Homelab Calendar"
+            android:textColor="#f8fafc"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/btnRefresh"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_toStartOf="@id/statusText"
+            android:layout_centerVertical="true"
+            android:layout_marginEnd="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_popup_sync"
+            app:tint="#38bdf8"
+            android:contentDescription="Refresh" />
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:background="@drawable/glass_badge_green"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="5dp"
+            android:text="Online"
+            android:textColor="#34d399"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+    </RelativeLayout>
+
+    <!-- Custom Calendar Card (Glassmorphic) -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/calendarCard"
+        android:layout_width="0dp"
+        android:layout_height="270dp"
+        android:layout_margin="8dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:cardBackgroundColor="@color/glass_bg"
+        app:layout_constraintTop_toBottomOf="@id/headerLayout"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <!-- Month Control -->
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginBottom="8dp">
+
+                <ImageButton
+                    android:id="@+id/btnPrevMonth"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Previous Month"
+                    android:src="@android:drawable/ic_media_previous"
+                    app:tint="#f8fafc" />
+
+                <TextView
+                    android:id="@+id/txtCurrentMonth"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_centerInParent="true"
+                    android:text="July 2026"
+                    android:textColor="#38bdf8"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/btnNextMonth"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_alignParentEnd="true"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Next Month"
+                    android:src="@android:drawable/ic_media_next"
+                    app:tint="#f8fafc" />
+            </RelativeLayout>
+
+            <!-- Days of Week Header -->
+            <GridLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:columnCount="7"
+                android:rowCount="1"
+                android:layout_marginBottom="8dp">
+                <TextView android:layout_width="0dp" android:layout_columnWeight="1" android:text="S" android:textAlignment="center" android:textColor="#94a3b8" android:textStyle="bold" android:textSize="12sp" />
+                <TextView android:layout_width="0dp" android:layout_columnWeight="1" android:text="M" android:textAlignment="center" android:textColor="#94a3b8" android:textStyle="bold" android:textSize="12sp" />
+                <TextView android:layout_width="0dp" android:layout_columnWeight="1" android:text="T" android:textAlignment="center" android:textColor="#94a3b8" android:textStyle="bold" android:textSize="12sp" />
+                <TextView android:layout_width="0dp" android:layout_columnWeight="1" android:text="W" android:textAlignment="center" android:textColor="#94a3b8" android:textStyle="bold" android:textSize="12sp" />
+                <TextView android:layout_width="0dp" android:layout_columnWeight="1" android:text="T" android:textAlignment="center" android:textColor="#94a3b8" android:textStyle="bold" android:textSize="12sp" />
+                <TextView android:layout_width="0dp" android:layout_columnWeight="1" android:text="F" android:textAlignment="center" android:textColor="#94a3b8" android:textStyle="bold" android:textSize="12sp" />
+                <TextView android:layout_width="0dp" android:layout_columnWeight="1" android:text="S" android:textAlignment="center" android:textColor="#94a3b8" android:textStyle="bold" android:textSize="12sp" />
+            </GridLayout>
+
+            <!-- Calendar Days Grid -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/calendarGrid"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                tools:listitem="@layout/item_calendar_day" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Quick Add Form -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/quickAddCard"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="8dp"
+        android:layout_marginTop="6dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:cardBackgroundColor="@color/glass_bg"
+        app:layout_constraintTop_toBottomOf="@id/calendarCard"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚡ Quick Add Task"
+                android:textColor="#38bdf8"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/inputDesc"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:background="@drawable/glass_edittext"
+                android:hint="Task description..."
+                android:textColorHint="#64748b"
+                android:textColor="#f8fafc"
+                android:paddingHorizontal="12dp"
+                android:textSize="14sp"
+                android:maxLines="1"
+                android:inputType="text"
+                android:layout_marginBottom="10dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnPickDate"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="44dp"
+                    android:backgroundTint="@color/glass_button_bg"
+                    android:text="Date"
+                    android:textColor="#f8fafc"
+                    android:textSize="12sp"
+                    android:textAllCaps="false"
+                    app:cornerRadius="10dp" />
+
+                <Button
+                    android:id="@+id/btnPickTime"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="44dp"
+                    android:backgroundTint="@color/glass_button_bg"
+                    android:text="Time"
+                    android:textColor="#f8fafc"
+                    android:textSize="12sp"
+                    android:textAllCaps="false"
+                    app:cornerRadius="10dp"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnSubmit"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#38bdf8"
+                android:text="Add to Server"
+                android:textColor="#0f172a"
+                android:textStyle="bold"
+                android:textSize="13sp"
+                android:textAllCaps="false"
+                app:cornerRadius="10dp" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Task List Header -->
+    <TextView
+        android:id="@+id/taskListTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="8dp"
+        android:text="Agenda"
+        android:textColor="#f8fafc"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toBottomOf="@id/quickAddCard"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Task Recycler View -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/taskRecyclerView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginHorizontal="8dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="8dp"
+        app:layout_constraintTop_toBottomOf="@id/taskListTitle"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        tools:listitem="@layout/item_task" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

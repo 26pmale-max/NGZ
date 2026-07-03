@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    
+    <color name="bg_dark_radial">#0f172a</color> <!-- Slate 900 -->
+    <color name="glass_bg">#1a203540</color> <!-- 25% white-ish slate -->
+    <color name="glass_item_bg">#14ffffff</color> <!-- 8% white -->
+    <color name="glass_button_bg">#1cffffff</color> <!-- 11% white -->
+</resources>

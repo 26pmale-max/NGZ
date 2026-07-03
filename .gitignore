@@ -1,0 +1,16 @@
+# Android-specific ignores
+.gradle/
+build/
+app/build/
+*.apk
+local.properties
+.idea/
+
+# Python-specific ignores
+__pycache__/
+*.pyc
+reminder_state.json
+things_to_do.json
+
+# OS-specific
+.DS_Store
