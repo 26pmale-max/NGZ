@@ -202,7 +202,7 @@ def serve_sw():
 
 @app.route('/api/tasks', methods=['GET'])
 def get_tasks():
-    # Synchronously pull latest changes from GitHub so the phone receives them immediately
+    # Trigger pull synchronously to import phone changes immediately
     try:
         sync_pull()
     except Exception as e:

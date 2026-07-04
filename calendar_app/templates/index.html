@@ -175,7 +175,7 @@
     <!-- Main Container -->
     <main class="flex-1 w-full max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 pb-24">
         <!-- Quick Add Section (Left Panel on Desktop, Top on Mobile) -->
-        <div class="lg:col-span-1 flex flex-col gap-6">
+        <div class="lg:col-span-1 flex flex-col gap-6" id="view-agenda">
             <div class="glass-card rounded-2xl p-5">
                 <h2 class="text-sm font-bold text-sky-400 mb-4 tracking-wide uppercase flex items-center gap-1.5">
                     <span>⚡</span> Quick Add Event
@@ -218,7 +218,7 @@
         </div>
 
         <!-- Full Interactive Calendar (Right Panel) -->
-        <div class="lg:col-span-3">
+        <div class="lg:col-span-3" id="view-calendar">
             <div class="glass-card rounded-2xl p-4 shadow-2xl">
                 <div id="calendar"></div>
             </div>
@@ -402,6 +402,9 @@
                 calendar.refetchEvents();
                 loadTaskList();
             }, 15000);
+
+            // Initialize responsive layout check on load
+            initResponsiveLayout();
         });
 
         function updateStatus() {
@@ -529,6 +532,67 @@
                     loadTaskList();
                 });
         }
+
+        // ─── Mobile Layout Switching Functions ─────────────────────────
+
+        function switchMobileView(view) {
+            if (window.innerWidth >= 1024) return; // Don't run on desktop
+
+            const viewAgenda = document.getElementById('view-agenda');
+            const viewCalendar = document.getElementById('view-calendar');
+            const btnAgenda = document.getElementById('nav-btn-agenda');
+            const btnCalendar = document.getElementById('nav-btn-calendar');
+
+            if (view === 'agenda') {
+                viewAgenda.classList.remove('hidden');
+                viewCalendar.classList.add('hidden');
+
+                btnAgenda.classList.add('text-sky-400');
+                btnAgenda.classList.remove('text-slate-400');
+                btnCalendar.classList.add('text-slate-400');
+                btnCalendar.classList.remove('text-sky-400');
+            } else {
+                viewAgenda.classList.add('hidden');
+                viewCalendar.classList.remove('hidden');
+
+                btnCalendar.classList.add('text-sky-400');
+                btnCalendar.classList.remove('text-slate-400');
+                btnAgenda.classList.add('text-slate-400');
+                btnAgenda.classList.remove('text-sky-400');
+
+                // Force calendar layout update
+                if (calendar) {
+                    calendar.updateSize();
+                }
+            }
+        }
+
+        function initResponsiveLayout() {
+            if (window.innerWidth < 1024) {
+                // Mobile: default to showing agenda view first
+                switchMobileView('agenda');
+            } else {
+                // Desktop: show both columns side-by-side
+                document.getElementById('view-agenda').classList.remove('hidden');
+                document.getElementById('view-calendar').classList.remove('hidden');
+            }
+        }
+
+        window.addEventListener('resize', initResponsiveLayout);
     </script>
+
+    <!-- Glassmorphic Mobile Navigation Bar (Only on Mobile) -->
+    <div class="fixed bottom-0 left-0 right-0 z-40 lg:hidden px-4 pb-4 pt-2 bg-slate-950/85 backdrop-blur-lg border-t border-white/5 shadow-2xl">
+        <div class="flex justify-around items-center max-w-md mx-auto">
+            <button id="nav-btn-agenda" onclick="switchMobileView('agenda')" class="flex flex-col items-center gap-1 py-1 px-5 rounded-xl text-sky-400 font-bold active-scale transition-all duration-200">
+                <span class="text-xl">📝</span>
+                <span class="text-[9px] tracking-wide uppercase">Agenda</span>
+            </button>
+            <button id="nav-btn-calendar" onclick="switchMobileView('calendar')" class="flex flex-col items-center gap-1 py-1 px-5 rounded-xl text-slate-400 font-bold active-scale transition-all duration-200">
+                <span class="text-xl">📅</span>
+                <span class="text-[9px] tracking-wide uppercase">Calendar</span>
+            </button>
+        </div>
+    </div>
 </body>
 </html>
