@@ -139,6 +139,18 @@ def startup_pull():
 
 threading.Thread(target=startup_pull, daemon=True).start()
 
+# ─── Periodic Background Sync (keeps PC server in sync with phone) ────
+def periodic_pull_loop():
+    import time
+    while True:
+        time.sleep(30)
+        try:
+            sync_pull()
+        except Exception as e:
+            print(f"[PERIODIC SYNC ERROR] {e}")
+
+threading.Thread(target=periodic_pull_loop, daemon=True).start()
+
 
 @app.route('/')
 def index():

@@ -396,6 +396,12 @@
             // Monitor online/offline status
             window.addEventListener('online', updateStatus);
             window.addEventListener('offline', updateStatus);
+
+            // Auto-refresh calendar and task list every 15 seconds to stay synced with GitHub/phone
+            setInterval(() => {
+                calendar.refetchEvents();
+                loadTaskList();
+            }, 15000);
         });
 
         function updateStatus() {
