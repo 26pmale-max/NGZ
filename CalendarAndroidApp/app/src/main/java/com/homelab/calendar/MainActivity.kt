@@ -306,8 +306,12 @@ class MainActivity : AppCompatActivity() {
 
                 var cloudTasks: List<Task>? = null
                 if (!pat.isNullOrEmpty()) {
-                    val (fetchedTasks, _) = fetchCloudTasksAndSha(pat)
-                    cloudTasks = fetchedTasks
+                    try {
+                        val (fetchedTasks, _) = fetchCloudTasksAndSha(pat)
+                        cloudTasks = fetchedTasks
+                    } catch (e: Exception) {
+                        android.util.Log.d("MainActivity", "GitHub API fetch failed: ${e.message}")
+                    }
                 }
 
                 if (cloudTasks == null) {
