@@ -569,8 +569,8 @@
 
         function initResponsiveLayout() {
             if (window.innerWidth < 1024) {
-                // Mobile: default to showing agenda view first
-                switchMobileView('agenda');
+                // Mobile: default to showing calendar view first so FullCalendar initializes with non-zero width
+                switchMobileView('calendar');
             } else {
                 // Desktop: show both columns side-by-side
                 document.getElementById('view-agenda').classList.remove('hidden');
