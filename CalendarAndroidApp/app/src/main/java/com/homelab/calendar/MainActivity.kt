@@ -3,6 +3,8 @@ package com.homelab.calendar
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -33,7 +35,11 @@ import com.homelab.calendar.databinding.ItemTaskBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.net.URL
@@ -47,6 +53,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var apiService: ApiService
+    private lateinit var okHttpClient: OkHttpClient
     private var tasks = mutableListOf<Task>()
     private var isLocalMode = false
 
@@ -95,9 +102,9 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // OkHttp client with 2s connect timeout → instant failover to cloud
-        val okHttpClient = OkHttpClient.Builder()
-            .connectTimeout(2, TimeUnit.SECONDS)
+        // OkHttp client with 1s connect timeout → instant failover to cloud
+        okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(1, TimeUnit.SECONDS)
             .readTimeout(3, TimeUnit.SECONDS)
             .writeTimeout(3, TimeUnit.SECONDS)
             .build()
@@ -232,9 +239,30 @@ class MainActivity : AppCompatActivity() {
         WorkManager.getInstance(this).enqueue(oneTimeSync)
     }
 
+    // ─── Network & Wifi Helper ───────────────────────────────────────
+
+    private fun isWifiConnected(): Boolean {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val activeNetwork = cm.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(activeNetwork) ?: return false
+            return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+        } else {
+            @Suppress("DEPRECATION")
+            val netInfo = cm.activeNetworkInfo
+            @Suppress("DEPRECATION")
+            return netInfo?.type == ConnectivityManager.TYPE_WIFI || netInfo?.type == ConnectivityManager.TYPE_ETHERNET
+        }
+    }
+
     // ─── Data Loading ────────────────────────────────────────────────
 
     private fun loadData() {
+        if (!isWifiConnected()) {
+            isLocalMode = false
+            tryFallbackCloud()
+            return
+        }
         lifecycleScope.launch {
             try {
                 val response = withContext(Dispatchers.IO) { apiService.getTasks() }
@@ -323,20 +351,23 @@ class MainActivity : AppCompatActivity() {
 
         val body = mapOf("description" to description, "date" to dateStr, "time" to timeStr)
 
+        if (!isWifiConnected() || !isLocalMode) {
+            cloudAddTask(description, dateStr, timeStr)
+            return
+        }
+
         lifecycleScope.launch {
-            if (isLocalMode) {
-                try {
-                    val response = withContext(Dispatchers.IO) { apiService.addTask(body) }
-                    if (response.isSuccessful) {
-                        binding.inputDesc.setText("")
-                        loadData()
-                        Toast.makeText(this@MainActivity, "Task added!", Toast.LENGTH_SHORT).show()
-                        return@launch
-                    }
-                } catch (_: Exception) { }
-            }
-            // Fallback: save offline and queue for background sync
-            saveOffline(description, dateStr, timeStr)
+            try {
+                val response = withContext(Dispatchers.IO) { apiService.addTask(body) }
+                if (response.isSuccessful) {
+                    binding.inputDesc.setText("")
+                    loadData()
+                    Toast.makeText(this@MainActivity, "Task added!", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+            } catch (_: Exception) { }
+            // Fallback: cloud add
+            cloudAddTask(description, dateStr, timeStr)
         }
     }
 
@@ -398,12 +429,16 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Cannot toggle offline tasks until synced", Toast.LENGTH_SHORT).show()
             return
         }
+        if (!isWifiConnected() || !isLocalMode) {
+            cloudToggleTask(taskId)
+            return
+        }
         lifecycleScope.launch {
             try {
                 val response = withContext(Dispatchers.IO) { apiService.toggleTask(taskId) }
                 if (response.isSuccessful) loadData()
-                else showError("Failed to update status")
-            } catch (e: Exception) { showError("Connection failed") }
+                else cloudToggleTask(taskId)
+            } catch (e: Exception) { cloudToggleTask(taskId) }
         }
     }
 
@@ -421,15 +456,171 @@ class MainActivity : AppCompatActivity() {
             }
             return
         }
+        if (!isWifiConnected() || !isLocalMode) {
+            cloudDeleteTask(taskId)
+            return
+        }
         lifecycleScope.launch {
             try {
                 val response = withContext(Dispatchers.IO) { apiService.deleteTask(taskId) }
                 if (response.isSuccessful) {
                     loadData()
                     Toast.makeText(this@MainActivity, "Task deleted", Toast.LENGTH_SHORT).show()
-                } else showError("Failed to delete task")
-            } catch (e: Exception) { showError("Connection failed") }
+                } else cloudDeleteTask(taskId)
+            } catch (e: Exception) { cloudDeleteTask(taskId) }
         }
+    }
+
+    // ─── Direct Cloud API Modifications ──────────────────────────────
+
+    private fun cloudAddTask(description: String, dateStr: String, timeStr: String) {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val pat = prefs.getString(GITHUB_PAT_KEY, null)
+        if (pat.isNullOrEmpty()) {
+            saveOffline(description, dateStr, timeStr)
+            checkGitHubPatSetup()
+            return
+        }
+
+        Toast.makeText(this, "Pushing to GitHub Cloud ☁️…", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val (currentTasks, sha) = fetchCloudTasksAndSha(pat)
+                val newId = if (currentTasks.isNotEmpty()) currentTasks.maxOf { it.id } + 1 else 1
+                val newTask = Task(newId, description, dateStr, timeStr, false)
+                currentTasks.add(newTask)
+
+                val success = pushCloudTasks(pat, currentTasks, sha, "Add task from mobile cloud")
+                if (success) {
+                    launch(Dispatchers.Main) {
+                        binding.inputDesc.setText("")
+                        loadData()
+                        Toast.makeText(this@MainActivity, "Saved to GitHub Cloud ☁️✨", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    launch(Dispatchers.Main) { saveOffline(description, dateStr, timeStr) }
+                }
+            } catch (e: Exception) {
+                launch(Dispatchers.Main) { saveOffline(description, dateStr, timeStr) }
+            }
+        }
+    }
+
+    private fun cloudToggleTask(taskId: Int) {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val pat = prefs.getString(GITHUB_PAT_KEY, null)
+        if (pat.isNullOrEmpty()) {
+            Toast.makeText(this, "GitHub PAT required for cloud edit", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        Toast.makeText(this, "Updating GitHub Cloud ☁️…", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val (currentTasks, sha) = fetchCloudTasksAndSha(pat)
+                val target = currentTasks.find { it.id == taskId }
+                if (target != null) {
+                    target.completed = !target.completed
+                    val success = pushCloudTasks(pat, currentTasks, sha, "Toggle task from mobile cloud")
+                    if (success) {
+                        launch(Dispatchers.Main) { loadData() }
+                    } else {
+                        launch(Dispatchers.Main) { showError("Cloud update failed") }
+                    }
+                }
+            } catch (e: Exception) {
+                launch(Dispatchers.Main) { showError("Cloud connection failed") }
+            }
+        }
+    }
+
+    private fun cloudDeleteTask(taskId: Int) {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val pat = prefs.getString(GITHUB_PAT_KEY, null)
+        if (pat.isNullOrEmpty()) {
+            Toast.makeText(this, "GitHub PAT required for cloud delete", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        Toast.makeText(this, "Deleting from GitHub Cloud ☁️…", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val (currentTasks, sha) = fetchCloudTasksAndSha(pat)
+                val initialSize = currentTasks.size
+                currentTasks.removeAll { it.id == taskId }
+                if (currentTasks.size < initialSize) {
+                    val success = pushCloudTasks(pat, currentTasks, sha, "Delete task from mobile cloud")
+                    if (success) {
+                        launch(Dispatchers.Main) {
+                            loadData()
+                            Toast.makeText(this@MainActivity, "Deleted from Cloud ☁️", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        launch(Dispatchers.Main) { showError("Cloud delete failed") }
+                    }
+                }
+            } catch (e: Exception) {
+                launch(Dispatchers.Main) { showError("Cloud connection failed") }
+            }
+        }
+    }
+
+    private fun fetchCloudTasksAndSha(pat: String): Pair<MutableList<Task>, String?> {
+        val request = Request.Builder()
+            .url("https://api.github.com/repos/26pmale-max/NGZ/contents/tasks.enc")
+            .get()
+            .addHeader("Authorization", "Bearer $pat")
+            .addHeader("Accept", "application/vnd.github+json")
+            .build()
+        val response = okHttpClient.newCall(request).execute()
+        val body = response.body?.string()
+        response.close()
+
+        val currentTasks = mutableListOf<Task>()
+        var sha: String? = null
+
+        if (body != null && response.isSuccessful) {
+            val json = JSONObject(body)
+            if (json.has("sha")) sha = json.getString("sha")
+            val base64Content = json.optString("content", "").replace("\n", "").replace("\r", "")
+            if (base64Content.isNotEmpty()) {
+                val encData = String(android.util.Base64.decode(base64Content, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                val decJson = CryptoHelper.decrypt(encData)
+                val type = object : TypeToken<List<Task>>() {}.type
+                val list: List<Task>? = Gson().fromJson(decJson, type)
+                if (list != null) currentTasks.addAll(list)
+            }
+        }
+        return Pair(currentTasks, sha)
+    }
+
+    private fun pushCloudTasks(pat: String, taskList: List<Task>, sha: String?, message: String): Boolean {
+        val plainJson = Gson().toJson(taskList)
+        val encryptedData = CryptoHelper.encrypt(plainJson)
+        val base64Content = android.util.Base64.encodeToString(
+            encryptedData.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP
+        )
+
+        val pushJson = JSONObject().apply {
+            put("message", message)
+            put("content", base64Content)
+            if (sha != null) put("sha", sha)
+        }
+
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val requestBody = pushJson.toString().toRequestBody(mediaType)
+
+        val request = Request.Builder()
+            .url("https://api.github.com/repos/26pmale-max/NGZ/contents/tasks.enc")
+            .put(requestBody)
+            .addHeader("Authorization", "Bearer $pat")
+            .addHeader("Accept", "application/vnd.github+json")
+            .build()
+
+        val response = okHttpClient.newCall(request).execute()
+        val success = response.isSuccessful
+        response.close()
+        return success
     }
 
     // ─── SharedPreferences ───────────────────────────────────────────

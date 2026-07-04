@@ -186,7 +186,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             response.close()
             if (responseBody != null) {
                 val json = JSONObject(responseBody)
-                return json.optString("sha", null)
+                return if (json.has("sha")) json.getString("sha") else null
             }
         } catch (e: Exception) {
             Log.d(TAG, "Could not fetch SHA: ${e.message}")
