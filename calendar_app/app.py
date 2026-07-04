@@ -202,11 +202,11 @@ def serve_sw():
 
 @app.route('/api/tasks', methods=['GET'])
 def get_tasks():
-    # Trigger pull asynchronously to import phone changes without blocking
+    # Synchronously pull latest changes from GitHub so the phone receives them immediately
     try:
-        sync_pull_async()
+        sync_pull()
     except Exception as e:
-        print(f"[API] Async pull trigger failed: {e}")
+        print(f"[API] Sync pull failed: {e}")
     return jsonify(load_tasks())
 
 @app.route('/api/tasks', methods=['POST'])

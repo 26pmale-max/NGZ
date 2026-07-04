@@ -111,14 +111,30 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val pat = getGitHubPat() ?: return false
 
         try {
-            // 1. Fetch current encrypted database from GitHub raw
+            // 1. Fetch current encrypted database & SHA from GitHub API (never cached by CDN!)
             val existingTasks = mutableListOf<Task>()
+            var sha: String? = null
             try {
-                val encData = URL(GITHUB_RAW_URL).readText().trim()
-                if (encData.isNotEmpty()) {
-                    val decryptedJson = CryptoHelper.decrypt(encData)
-                    val taskType = object : TypeToken<List<Task>>() {}.type
-                    existingTasks.addAll(Gson().fromJson(decryptedJson, taskType))
+                val getReq = Request.Builder()
+                    .url(GITHUB_API_URL)
+                    .get()
+                    .addHeader("Authorization", "Bearer $pat")
+                    .addHeader("Accept", "application/vnd.github+json")
+                    .build()
+                val getRes = cloudClient.newCall(getReq).execute()
+                val getBody = getRes.body?.string()
+                getRes.close()
+                if (getBody != null && getRes.isSuccessful) {
+                    val json = JSONObject(getBody)
+                    if (json.has("sha")) sha = json.getString("sha")
+                    val base64Content = json.optString("content", "").replace("\n", "").replace("\r", "")
+                    if (base64Content.isNotEmpty()) {
+                        val encData = String(android.util.Base64.decode(base64Content, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                        val decryptedJson = CryptoHelper.decrypt(encData)
+                        val taskType = object : TypeToken<List<Task>>() {}.type
+                        val list: List<Task>? = Gson().fromJson(decryptedJson, taskType)
+                        if (list != null) existingTasks.addAll(list)
+                    }
                 }
             } catch (e: Exception) {
                 Log.d(TAG, "Could not fetch existing cloud data: ${e.message}")
@@ -135,9 +151,6 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             // 3. Encrypt merged database
             val mergedJson = Gson().toJson(existingTasks)
             val encryptedData = CryptoHelper.encrypt(mergedJson)
-
-            // 4. Get current file SHA (required by GitHub API for updates)
-            val sha = getGitHubFileSha(pat)
 
             // 5. Push via GitHub Contents API
             val pushJson = JSONObject().apply {

@@ -129,6 +129,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Reload latest tasks whenever app comes to foreground so changes from PC appear instantly
+        loadData()
         // Re-check for pending tasks to sync whenever app comes to foreground
         val pending = getPendingTasks()
         if (pending.isNotEmpty()) {
@@ -299,13 +301,33 @@ class MainActivity : AppCompatActivity() {
     private fun tryFallbackCloud(errorMessage: String? = null) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val url = "https://raw.githubusercontent.com/26pmale-max/NGZ/main/tasks.enc"
-                val encData = URL(url).readText().trim()
-                if (encData.isNotEmpty()) {
-                    val decryptedJson = CryptoHelper.decrypt(encData)
-                    val taskType = object : TypeToken<List<Task>>() {}.type
-                    val cloudTasks = Gson().fromJson<List<Task>>(decryptedJson, taskType)
+                val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                val pat = prefs.getString(GITHUB_PAT_KEY, null)
 
+                var cloudTasks: List<Task>? = null
+                if (!pat.isNullOrEmpty()) {
+                    val (fetchedTasks, _) = fetchCloudTasksAndSha(pat)
+                    cloudTasks = fetchedTasks
+                }
+
+                if (cloudTasks == null) {
+                    // Fallback: raw URL with timestamp and cache-busting headers to prevent CDN caching
+                    val request = Request.Builder()
+                        .url("https://raw.githubusercontent.com/26pmale-max/NGZ/main/tasks.enc?t=" + System.currentTimeMillis())
+                        .header("Cache-Control", "no-cache, no-store, must-revalidate")
+                        .header("Pragma", "no-cache")
+                        .build()
+                    val response = okHttpClient.newCall(request).execute()
+                    val encData = response.body?.string()?.trim() ?: ""
+                    response.close()
+                    if (encData.isNotEmpty()) {
+                        val decryptedJson = CryptoHelper.decrypt(encData)
+                        val taskType = object : TypeToken<List<Task>>() {}.type
+                        cloudTasks = Gson().fromJson<List<Task>>(decryptedJson, taskType)
+                    }
+                }
+
+                if (cloudTasks != null) {
                     launch(Dispatchers.Main) {
                         tasks.clear()
                         tasks.addAll(cloudTasks)
