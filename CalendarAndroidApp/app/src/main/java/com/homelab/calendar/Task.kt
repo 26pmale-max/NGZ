@@ -5,5 +5,5 @@ data class Task(
     val description: String,
     val date: String, // YYYY-MM-DD
     val time: String, // HH:MM
-    val completed: Boolean
+    var completed: Boolean
 )
